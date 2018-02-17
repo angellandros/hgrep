@@ -41,4 +41,44 @@ nullable (RegExRe2 (Re2Post atom (PostfixEpsilon))) = nullable (RegExAtom atom)
 nullable (RegExAtom (AtomLit (GLitC c))) = False
 nullable (RegExAtom (AtomBr bro re0 brc)) = nullable (RegExRe0 re0)
 
+regex2re0 :: RegEx -> Re0
+regex2re0 (RegExRe0 re0) = re0
+regex2re0 (RegExRe1 re1) = (Re0One re1)
+regex2re0 (RegExRe2 re2) = regex2re0 (RegExRe1 (Re1One re2))
+regex2re0 (RegExAtom (AtomBr bro re0 brc)) = re0
+regex2re0 (RegExAtom atom) = regex2re0 (RegExRe2 (Re2Post atom PostfixEpsilon))
+regex2re0 _ = error "Cannot convert improper RegEx to Re0"
+
+regex2re1 :: RegEx -> Re1
+regex2re1 (RegExRe1 re1) = re1
+regex2re1 (RegExRe2 re2) = (Re1One re2)
+regex2re1 (RegExAtom atom) = regex2re1 (RegExRe2 (Re2Post atom PostfixEpsilon))
+regex2re1 (RegExRe0 re0) = regex2re1 (RegExAtom (AtomBr GBrOpenC re0 GBrCloseC))
+regex2re1 _ = error "Cannot convert improper RegEx to Re1"
+
+regex2re2 :: RegEx -> Re2
+regex2re2 (RegExRe2 re2) = re2
+regex2re2 (RegExAtom atom) = regex2re2 (RegExRe2 (Re2Post atom PostfixEpsilon))
+regex2re2 (RegExRe0 re0) = regex2re2 (RegExAtom (AtomBr GBrOpenC re0 GBrCloseC))
+regex2re2 (RegExRe1 re1) = regex2re2 (RegExRe0 (Re0One re1))
+regex2re2 _ = error "Cannot convert improper RegEx to Re2"
+
+derivative :: Char -> RegEx -> RegEx
+derivative _ RegExEmpty = RegExEmpty
+derivative _ RegExEpsilon = RegExEmpty
+derivative c (RegExRe0 (Re0One re1)) = derivative c (RegExRe1 re1)
+derivative c (RegExRe0 (Re0Mult re1 gline re0)) = RegExRe0 (Re0Mult (regex2re1 (derivative c (RegExRe1 re1))) GLineC (regex2re0 (derivative c (RegExRe0 re0))))
+derivative c (RegExRe1 (Re1One re2)) = derivative c (RegExRe2 re2)
+derivative c (RegExRe1 (Re1Mult re2 re1))
+    | nullable (RegExRe2 re2) = RegExRe0 (Re0Mult (Re1Mult (regex2re2 (derivative c (RegExRe2 re2))) re1) GLineC (regex2re0 (derivative c (RegExRe1 re1))))
+    | otherwise               =          RegExRe1 (Re1Mult (regex2re2 (derivative c (RegExRe2 re2))) re1)
+derivative c (RegExRe2 (Re2Post atom (PostfixStar gstar))) = RegExRe1 (Re1Mult (regex2re2 (derivative c (RegExAtom atom))) (regex2re1 (RegExRe2 (Re2Post atom (PostfixStar GStarC)))))
+derivative c (RegExRe2 (Re2Post atom PostfixEpsilon)) = derivative c (RegExAtom atom)
+derivative c (RegExAtom (AtomLit (GLitC c')))
+    | c == c'   = RegExEpsilon
+    | otherwise = RegExEmpty
+
+match :: String -> RegEx -> Bool
+match [] r = nullable r
+match (c:cs) r = match cs (derivative c r)
 
