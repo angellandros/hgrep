@@ -19,5 +19,7 @@ printWords (x:xs) = do
 
 
 main = do 
-    args <- getArgs
-    mapM readWords args
+    (regex:files) <- getArgs
+
+    putStrLn regex -- just to show the first arg
+    mapM readWords files
