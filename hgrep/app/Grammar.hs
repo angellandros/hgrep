@@ -1,5 +1,7 @@
 module Grammar where
 
+import Data.List.Utils
+
 data GramChar = GCLit Char | GCLine GLine | GCBrOpen GBrOpen | GCBrClose GBrClose | GCStar GStar | GCEpsilon GEpsilon
     deriving (Eq, Show)
 
@@ -63,6 +65,10 @@ regex2re2 (RegExRe0 re0) = regex2re2 (RegExAtom (AtomBr GBrOpenC re0 GBrCloseC))
 regex2re2 (RegExRe1 re1) = regex2re2 (RegExRe0 (Re0One re1))
 regex2re2 _ = error "Cannot convert improper RegEx to Re2"
 
+regex2atom :: RegEx -> Atom
+regex2atom (RegExAtom atom) = atom
+regex2atom r = AtomBr GBrOpenC (regex2re0 r) GBrCloseC
+
 derivative :: Char -> RegEx -> RegEx
 derivative _ RegExEmpty = RegExEmpty
 derivative c (RegExRe0 (Re0One re1)) = derivative c (RegExRe1 re1)
@@ -76,16 +82,64 @@ derivative c (RegExRe1 (Re1Mult re2 re1))
           if derivative c (RegExRe1 re1) == RegExEmpty then RegExRe1 (Re1Mult (regex2re2 (derivative c (RegExRe2 re2))) re1) else
               RegExRe0 (Re0Mult (Re1Mult (regex2re2 (derivative c (RegExRe2 re2))) re1) GLineC (regex2re0 (derivative c (RegExRe1 re1))))
       )
-    | otherwise               =          RegExRe1 (Re1Mult (regex2re2 (derivative c (RegExRe2 re2))) re1)
-derivative c (RegExRe2 (Re2Post atom (PostfixStar gstar))) = if derivative c (RegExAtom atom) == RegExEmpty then RegExRe2 (Re2Post atom (PostfixStar GStarC)) else 
+    | otherwise               = if derivative c (RegExRe2 re2) == RegExEmpty then RegExEmpty else
+        RegExRe1 (Re1Mult (regex2re2 (derivative c (RegExRe2 re2))) re1)
+derivative c (RegExRe2 (Re2Post atom (PostfixStar gstar))) = if derivative c (RegExAtom atom) == RegExEmpty then RegExEmpty else 
         RegExRe1 (Re1Mult (regex2re2 (derivative c (RegExAtom atom))) (regex2re1 (RegExRe2 (Re2Post atom (PostfixStar GStarC)))))
 derivative c (RegExRe2 (Re2Post atom PostfixEpsilon)) = derivative c (RegExAtom atom)
 derivative _ (RegExAtom (AtomEpsilon _)) = RegExEmpty
 derivative c (RegExAtom (AtomLit (GLitC c')))
     | c == c'   = (RegExAtom (AtomEpsilon GEpsilonC))
     | otherwise = RegExEmpty
+derivative c (RegExAtom (AtomBr _ re0 _)) = derivative c (RegExRe0 re0)
 
+-- return whether a String match a RegEx
 match :: String -> RegEx -> Bool
 match [] r = nullable r
 match (c:cs) r = match cs (derivative c r)
 
+-- utility function : merge a String with the first element of a String List
+mergeFirst :: String -> [String] -> [String]
+mergeFirst s' [] = [s']
+mergeFirst s' (s:ss) = (s'++s):ss
+
+-- split first occurence of a Char in a String, in the top level 0
+-- with n /= 0 nothing will match
+splitWithLevel :: String -> Char -> Int -> [String]
+splitWithLevel [] _ _ = [""]
+splitWithLevel (c:cs) c' n
+    | c == '(' = mergeFirst [c] (splitWithLevel cs c' (n + 1))
+    | c == ')' = mergeFirst [c] (splitWithLevel cs c' (n - 1))
+splitWithLevel (c:cs) c' 0
+    | c == c'   = ["", cs]
+    | otherwise = mergeFirst [c] (splitWithLevel cs c' 0)
+splitWithLevel (c:cs) c' n = mergeFirst [c] (splitWithLevel cs c' n)
+
+-- String to RegEx translation function
+dotize :: String -> String
+dotize s = 
+    replace ".." "." (
+    replace ".*" "*" (
+    replace ".|." "|" (
+    replace ".(." "(" (
+    replace ".)." ")" (
+    replace "(." "(" (
+    replace ".)" ")" (
+    replace " " "." (
+        unwords (map (\c -> [c]) s)
+    ))))))))
+
+str2regex :: String -> RegEx
+str2regex s = let s' = dotize s in 
+    case splitWithLevel s' '|' 0 of 
+        [s1, s2] -> RegExRe0 (Re0Mult (regex2re1 (str2regex s1)) GLineC (regex2re0 (str2regex s2))) 
+        _        -> case splitWithLevel s' '.' 0 of
+            [s1, s2] -> RegExRe1 (Re1Mult (regex2re2 (str2regex s1)) (regex2re1 (str2regex s2)))
+            _        -> case splitWithLevel s' '*' 0 of
+                [s1, ""]  -> RegExRe2 (Re2Post (regex2atom (str2regex s1)) (PostfixStar GStarC))
+                _         -> case (take 1 s', drop (length s' - 1) s') of
+                    ("(", ")") -> RegExAtom (AtomBr GBrOpenC (regex2re0 (str2regex (drop 1 (take (length s' - 1) s')))) GBrCloseC)
+                    _          -> case s' of
+                        []       -> RegExAtom (AtomEpsilon GEpsilonC)
+                        [c]      -> RegExAtom (AtomLit (GLitC c))
+                        _        -> RegExEmpty
