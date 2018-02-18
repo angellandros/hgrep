@@ -89,9 +89,17 @@ derivative c (RegExRe2 (Re2Post atom (PostfixStar gstar))) = if derivative c (Re
 derivative c (RegExRe2 (Re2Post atom PostfixEpsilon)) = derivative c (RegExAtom atom)
 derivative _ (RegExAtom (AtomEpsilon _)) = RegExEmpty
 derivative c (RegExAtom (AtomLit (GLitC c')))
-    | c == c'   = (RegExAtom (AtomEpsilon GEpsilonC))
-    | otherwise = RegExEmpty
+    | comChar c' c = (RegExAtom (AtomEpsilon GEpsilonC))
+    | otherwise    = RegExEmpty
 derivative c (RegExAtom (AtomBr _ re0 _)) = derivative c (RegExRe0 re0)
+
+-- comparing characters (especially escaped ones)
+comChar :: Char -> Char -> Bool
+comChar '‹' '(' = True
+comChar '›' ')' = True
+comChar '‖' '|' = True
+comChar '×' '*' = True
+comChar c c' = if c == c' then True else False
 
 -- return whether a String match a RegEx
 match :: String -> RegEx -> Bool
@@ -116,24 +124,34 @@ splitWithLevel (c:cs) c' 0
 splitWithLevel (c:cs) c' n = mergeFirst [c] (splitWithLevel cs c' n)
 
 -- String to RegEx translation function
+middotize :: String -> String
+middotize [] = []
+middotize [c] = [c]
+middotize (c:cs) = [c, '·'] ++ middotize cs
+
 dotize :: String -> String
 dotize s = 
-    replace ".." "." (
-    replace ".*" "*" (
-    replace ".|." "|" (
-    replace ".(." "(" (
-    replace ".)." ")" (
-    replace "(." "(" (
-    replace ".)" ")" (
-    replace " " "." (
-        unwords (map (\c -> [c]) s)
-    ))))))))
+    replace "··" "·" (
+    replace "·*" "*" (
+    replace "·|·" "|" (
+    replace "·(·" "(" (
+    replace "·)·" ")" (
+    replace "(·" "(" (
+    replace "·)" ")" (
+        middotize (
+        replace "\\*" "×" (
+        replace "\\|" "‖" (
+        replace "\\)" "›" (
+        replace "\\(" "‹" (
+            s
+        )))))
+    )))))))
 
 str2regex :: String -> RegEx
 str2regex s = let s' = dotize s in 
     case splitWithLevel s' '|' 0 of 
         [s1, s2] -> RegExRe0 (Re0Mult (regex2re1 (str2regex s1)) GLineC (regex2re0 (str2regex s2))) 
-        _        -> case splitWithLevel s' '.' 0 of
+        _        -> case splitWithLevel s' '·' 0 of
             [s1, s2] -> RegExRe1 (Re1Mult (regex2re2 (str2regex s1)) (regex2re1 (str2regex s2)))
             _        -> case splitWithLevel s' '*' 0 of
                 [s1, ""]  -> RegExRe2 (Re2Post (regex2atom (str2regex s1)) (PostfixStar GStarC))
