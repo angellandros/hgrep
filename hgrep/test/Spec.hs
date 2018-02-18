@@ -16,6 +16,8 @@ testMatch2 = TestCase $ assertEqual "match" (match "abb" (str2regex "(a|b)*")) T
 testMatch3 = TestCase $ assertEqual "match" (match "a" (str2regex "ab*")) True
 testMatch4 = TestCase $ assertEqual "match" (match "abbb" (str2regex "ab*")) True
 testMatch5 = TestCase $ assertEqual "match" (match "b" (str2regex "a*")) False
+testMatch6 = TestCase $ assertEqual "match" (match "main" (str2regex "ma[a-z]*")) True
+testMatch7 = TestCase $ assertEqual "match" (match "ma" (str2regex "ma[a-z]")) False
 
 testList = TestList [
     TestLabel "nullable nothing = False" testNull1, 
@@ -26,4 +28,6 @@ testList = TestList [
     TestLabel "abb ~ (a|b)*" testMatch2,
     TestLabel "a ~ ab*" testMatch3,
     TestLabel "abbb ~ ab*" testMatch4,
-    TestLabel "b /~ a*" testMatch5]
+    TestLabel "b /~ a*" testMatch5,
+    TestLabel "main ~ ma[a-z]*" testMatch6,
+    TestLabel "ma /~ ma[a-z]" testMatch7]
