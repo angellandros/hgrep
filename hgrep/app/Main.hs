@@ -30,7 +30,7 @@ checkLineAndPrint regexstr line =
     if (matchLine (words line) regexstr) /= [] then
         let w = matchLine (words line) regexstr in
         let i = fromJust (findSubstring w line) in
-        putStrLn $ ((slice 0 (i-1) line) ++ "\x1b[32m" ++ (slice i (i + (length w)) line) ++ "\x1b[0m" ++ (slice (i + (length w)+1) (i+(length line)) line))
+        putStrLn $ ((slice 0 (i-1) line) ++ "\x1b[31m\x1b[1m" ++ (slice i (i + (length w)) line) ++ "\x1b[0m" ++ (slice (i + (length w)+1) (i+(length line)) line))
     else return ()
 
 
