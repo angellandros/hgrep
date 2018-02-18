@@ -99,6 +99,7 @@ comChar '‹' '(' = True
 comChar '›' ')' = True
 comChar '‖' '|' = True
 comChar '×' '*' = True
+comChar '.' _   = True
 comChar c c' = if c == c' then True else False
 
 -- return whether a String match a RegEx
@@ -131,21 +132,30 @@ middotize (c:cs) = [c, '·'] ++ middotize cs
 
 dotize :: String -> String
 dotize s = 
-    replace "··" "·" (
-    replace "·*" "*" (
-    replace "·|·" "|" (
-    replace "·(·" "(" (
-    replace "·)·" ")" (
-    replace "(·" "(" (
-    replace "·)" ")" (
-        middotize (
-        replace "\\*" "×" (
-        replace "\\|" "‖" (
-        replace "\\)" "›" (
-        replace "\\(" "‹" (
-            s
-        )))))
-    )))))))
+    replace "··" "·" $
+    replace "·*" "*" $
+    replace "·|·" "|" $
+    replace "·(·" "(" $
+    replace "·)·" ")" $
+    replace "(·" "(" $
+    replace "·)" ")" $
+    middotize $
+    -- escape characters
+    replace "\\*" "×" $
+    replace "\\|" "‖" $
+    replace "\\)" "›" $
+    replace "\\(" "‹" $
+    -- support ranges : a-z A-Z 0-9
+    replace "[" "(" $
+    replace "]" ")" $
+    replace "a-z" "a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z" $
+    replace "A-Z" "A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z" $
+    replace "0-9" "0|1|2|3|4|5|6|7|8|9" $
+    replace "||" "|" $
+    replace "a-z" "|a-z|" $
+    replace "A-Z" "|A-Z|" $
+    replace "0-9" "|0-9|" $
+        s
 
 str2regex :: String -> RegEx
 str2regex s = let s' = dotize s in 
