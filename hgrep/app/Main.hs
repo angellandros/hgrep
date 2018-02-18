@@ -6,6 +6,14 @@ import Data.Char
 import Data.List
 import Data.Maybe
 
+-- gets a single line and check the matching situation, returning matched word, before, and after
+matchLine' :: [String] -> String -> ([String], String, [String])
+matchLine' [] _ = ([], "", [])
+matchLine' (w:ws) regexstr 
+    | Grammar.match w (Grammar.str2regex regexstr) = ([], w, ws)
+    | otherwise = case matchLine' ws regexstr of
+        (a, b, c) -> (w:a, b, c)
+
 -- gets a single line and check the matching situation
 matchLine :: [String] -> String -> String
 matchLine [] _ = []
@@ -26,18 +34,13 @@ matchFileLines regexstr path = do
     return ()
 
 -- check the line words with the regex (using matchLine) and then print it when match
-checkLineAndPrint regexstr line = 
-    if (matchLine (words line) regexstr) /= [] then
-        let w = matchLine (words line) regexstr in
-        let i = fromJust (findSubstring w line) in
-        putStrLn $ ((slice 0 (i-1) line) ++ "\x1b[31m\x1b[1m" ++ (slice i (i + (length w)) line) ++ "\x1b[0m" ++ (slice (i + (length w)+1) (i+(length line)) line))
-    else return ()
-
-
-findSubstring :: Eq a => [a] -> [a] -> Maybe Int
-findSubstring pat str = findIndex (isPrefixOf pat) (tails str) 
-
-slice start end = take (end - start + 1) . drop start
+checkLineAndPrint regexstr line =
+    let matched = matchLine' (words line) regexstr in
+        case matched of 
+            (before, word, after) ->
+                if word /= "" then
+                    putStrLn $ (unwords before) ++ "\x1b[31m\x1b[1m " ++ word ++ " \x1b[0m" ++ (unwords after)
+                else return ()
 
 -- main function
 main = do 
